@@ -1,0 +1,3 @@
+raspend==2.0.1
+win_inet_pton==1.1.0
+pyModbusTCP==0.1.8
