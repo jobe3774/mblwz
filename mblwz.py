@@ -190,8 +190,8 @@ def main():
 
     myApp = RaspendApplication(args.port)
 
-    #hostName = "servicewelt"
-    hostName = "localhost"
+    hostName = "servicewelt"
+    #hostName = "localhost"
 
     lwz404 = HeatPump(hostName, 502, 1, args.code)
 
