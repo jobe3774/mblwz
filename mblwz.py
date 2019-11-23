@@ -35,8 +35,8 @@ class HeatPumpRegisters():
     def __init__(self):
         self.OUTSIDE_TEMPERATURE = ModbusRegister(6, 1)
         self.CURRENT_ROOM_TEMPERATURE = ModbusRegister(0, 1)
-        self.CURRENT_EXHAUST_FAN_SPEED = ModbusRegister(17, 1)
-        self.CURRENT_SUPPLY_FAN_SPEED = ModbusRegister(19, 1)
+        self.CURRENT_SUPPLY_FAN_SPEED = ModbusRegister(17, 1)
+        self.CURRENT_EXHAUST_FAN_SPEED = ModbusRegister(19, 1)
         self.AIRING_LEVEL_DAY = ModbusRegister(1017, 1)
         self.AIRING_LEVEL_NIGHT = ModbusRegister(1018, 1)
 
