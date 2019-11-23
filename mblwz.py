@@ -72,7 +72,8 @@ class HeatPumpRegisters():
         return val
 
 class HeatPump():
-    def __init__(self, ipOrHostName, portNumber, unitId):
+    def __init__(self, ipOrHostName, portNumber, unitId, code):
+        self.code = code
         self.registers = HeatPumpRegisters()
         self.mbClient = ModbusClient()
         self.mbClient.host(ipOrHostName)
@@ -89,16 +90,18 @@ class HeatPump():
 
         return
 
-    def setAiringLevelDay(self, airingLevel):
-        return self._setAiringLevel(self.registers.AIRING_LEVEL_DAY.number, airingLevel)
+    def setAiringLevelDay(self, airingLevel, code):
+        return self._setAiringLevel(self.registers.AIRING_LEVEL_DAY.number, airingLevel, code)
 
-    def setAiringLevelNight(self, airingLevel):
-        return self._setAiringLevel(self.registers.AIRING_LEVEL_NIGHT.number, airingLevel)
+    def setAiringLevelNight(self, airingLevel, code):
+        return self._setAiringLevel(self.registers.AIRING_LEVEL_NIGHT.number, airingLevel, code)
 
-    def _setAiringLevel(self, registerNumber, airingLevel):
+    def _setAiringLevel(self, registerNumber, airingLevel, code):
+        if int(code) != self.code:
+            return (False, "Invalid security code")
+
         if not self.mbClient.is_open() and not self.mbClient.open():
-            print ("Unable to connect to {}:{}".format(self.mbClient.host(), self.mbClient.port()))
-            return False
+            return (False, "Unable to connect to {}:{}".format(self.mbClient.host(), self.mbClient.port()))
 
         if type(airingLevel) == str:
             try:
@@ -109,9 +112,9 @@ class HeatPump():
         retVal = self.mbClient.write_single_register(registerNumber, airingLevel)
 
         if not retVal:
-            return False
+            return (False, "Failed to set airing level")
         else:
-            return True
+            return (True, "Setting airing level successful")
 
     def readCurrentValues(self):
         if not self.mbClient.is_open() and not self.mbClient.open():
@@ -178,7 +181,7 @@ def main():
     # Check commandline arguments.
     cmdLineParser = argparse.ArgumentParser(prog="mblwz", usage="%(prog)s [options]")
     cmdLineParser.add_argument("--port", help="The port the server should listen on", type=int, required=True)
-    #cmdLineParser.add_argument("--config", help="Path to the config file", type=str, required=True)
+    cmdLineParser.add_argument("--code", help="Code number for setting airing levels ", type=int, required=False, default=0)
 
     try: 
         args = cmdLineParser.parse_args()
@@ -190,12 +193,12 @@ def main():
     #hostName = "servicewelt"
     hostName = "localhost"
 
-    lwz404 = HeatPump(hostName, 502, 1)
+    lwz404 = HeatPump(hostName, 502, 1, args.code)
 
     myApp.addCommand(lwz404.setAiringLevelDay)
     myApp.addCommand(lwz404.setAiringLevelNight)
 
-    myApp.createWorkerThread(HeatPumpReader("stiebel_eltron_lwz404_trend", HeatPump(hostName, 502, 1)), 5)
+    myApp.createWorkerThread(HeatPumpReader("stiebel_eltron_lwz404_trend", HeatPump(hostName, 502, 1, args.code)), 5)
 
     myApp.run()
 
