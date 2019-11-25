@@ -65,7 +65,7 @@ class HeatPumpRegisters():
         for i in range(0, sizeBytes, 1):
             val |= regVal[i]
             if i < sizeBytes-1:
-                val <<= 16
+                val <<= 8
 
         if val == HeatPumpConstants.NAN_VALUE:
             val = 0
