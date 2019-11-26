@@ -181,6 +181,9 @@ def main():
     # Check commandline arguments.
     cmdLineParser = argparse.ArgumentParser(prog="mblwz", usage="%(prog)s [options]")
     cmdLineParser.add_argument("--port", help="The port the server should listen on", type=int, required=True)
+    cmdLineParser.add_argument("--hp-ip", help="The IP or hostname of the heat pump", type=str, required=True)
+    cmdLineParser.add_argument("--hp-port", help="The modbus port the heat pump has configured (default: 502)", type=int, required=False, default=502)
+    cmdLineParser.add_argument("--hp-unit-id", help="The heat pumps modbus unit id (default: 1)", type=int, required=False, default=1)
     cmdLineParser.add_argument("--code", help="Code number for setting airing levels ", type=int, required=False, default=0)
 
     try: 
@@ -190,15 +193,16 @@ def main():
 
     myApp = RaspendApplication(args.port)
 
-    hostName = "servicewelt"
-    #hostName = "localhost"
+    mbHostName = args.hp_ip
+    mbPortNumber = args.hp_port
+    mbUnitId = args.hp_unit_id
 
-    lwz404 = HeatPump(hostName, 502, 1, args.code)
+    lwz404 = HeatPump(mbHostName, mbPortNumber, mbUnitId, args.code)
 
     myApp.addCommand(lwz404.setAiringLevelDay)
     myApp.addCommand(lwz404.setAiringLevelNight)
 
-    myApp.createWorkerThread(HeatPumpReader("stiebel_eltron_lwz404_trend", HeatPump(hostName, 502, 1, args.code)), 5)
+    myApp.createWorkerThread(HeatPumpReader("stiebel_eltron_lwz404_trend", HeatPump(mbHostName, mbPortNumber, mbUnitId, args.code)), 5)
 
     myApp.run()
 
