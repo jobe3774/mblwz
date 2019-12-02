@@ -26,10 +26,11 @@ from raspend import RaspendApplication, ThreadHandlerBase
 from collections import namedtuple
 from pyModbusTCP.client import ModbusClient
 
-ModbusRegister = namedtuple("ModbusRegister", "number sizeBytes")
+ModbusRegister = namedtuple("ModbusRegister", "Address SequenceSize")
 
 class HeatPumpConstants():
     NAN_VALUE = 0x8000
+    MBREG_BITWIDTH = 16
 
 class HeatPumpRegisters():
     def __init__(self):
@@ -39,11 +40,12 @@ class HeatPumpRegisters():
         self.CURRENT_EXHAUST_FAN_SPEED = ModbusRegister(19, 1)
         self.AIRING_LEVEL_DAY = ModbusRegister(1017, 1)
         self.AIRING_LEVEL_NIGHT = ModbusRegister(1018, 1)
+        self.POWER_CONSUMPTION_HEATING_DAY = ModbusRegister(3021, 1)
+        self.POWER_CONSUMPTION_WARMWATER_DAY = ModbusRegister(3024, 1)
 
-    def convertSignedValue(self, val, sizeBytes):
+    def convertSignedValue(self, val, bits):
         """ Signed values are represented as two's complement.
         """
-        bits = sizeBytes * 8
         maxValue = 2 ** (bits) - 1
 
         if val > maxValue or val < 0:
@@ -55,17 +57,17 @@ class HeatPumpRegisters():
         else:
             return val - 2 ** bits
 
-    def shiftValue(self, regVal, sizeBytes):
+    def shiftValue(self, regVal, sequenceSize):
         if regVal is None:
             return 0
-        if len(regVal) != sizeBytes:
+        if len(regVal) != sequenceSize:
             return 0
 
         val = 0
-        for i in range(0, sizeBytes, 1):
+        for i in range(0, sequenceSize, 1):
             val |= regVal[i]
-            if i < sizeBytes-1:
-                val <<= 8
+            if i < sequenceSize-1:
+                val <<= HeatPumpConstants.MBREG_BITWIDTH
 
         if val == HeatPumpConstants.NAN_VALUE:
             val = 0
@@ -87,6 +89,8 @@ class HeatPump():
         self.currentSupplyFanSpeed = HeatPumpConstants.NAN_VALUE
         self.airingLevelDay = HeatPumpConstants.NAN_VALUE
         self.airingLevelNight = HeatPumpConstants.NAN_VALUE
+        self.powerConsumptionHeatingDay = HeatPumpConstants.NAN_VALUE
+        self.powerConsumptionWarmWaterDay = HeatPumpConstants.NAN_VALUE
 
         return
 
@@ -121,23 +125,45 @@ class HeatPump():
             print ("Unable to connect to {}:{}".format(self.mbClient.host(), self.mbClient.port()))
             return False
 
-        regVal_outsideTemperature = self.mbClient.read_input_registers(self.registers.OUTSIDE_TEMPERATURE.number, self.registers.OUTSIDE_TEMPERATURE.sizeBytes)
-        regVal_currentRoomTemperature = self.mbClient.read_input_registers(self.registers.CURRENT_ROOM_TEMPERATURE.number, self.registers.CURRENT_ROOM_TEMPERATURE.sizeBytes)
-        regVal_currentExhaustFanSpeed = self.mbClient.read_input_registers(self.registers.CURRENT_EXHAUST_FAN_SPEED.number, self.registers.CURRENT_EXHAUST_FAN_SPEED.sizeBytes)
-        regVal_currentSupplyFanSpeed = self.mbClient.read_input_registers(self.registers.CURRENT_SUPPLY_FAN_SPEED.number, self.registers.CURRENT_SUPPLY_FAN_SPEED.sizeBytes)
-        regVal_airingLevelDay = self.mbClient.read_holding_registers(self.registers.AIRING_LEVEL_DAY.number, self.registers.AIRING_LEVEL_DAY.sizeBytes)
-        regVal_airingLevelNight = self.mbClient.read_holding_registers(self.registers.AIRING_LEVEL_NIGHT.number, self.registers.AIRING_LEVEL_NIGHT.sizeBytes)
+        regVal_outsideTemperature = self.mbClient.read_input_registers(self.registers.OUTSIDE_TEMPERATURE.Address, 
+                                                                       self.registers.OUTSIDE_TEMPERATURE.SequenceSize)
+        regVal_currentRoomTemperature = self.mbClient.read_input_registers(self.registers.CURRENT_ROOM_TEMPERATURE.Address, 
+                                                                           self.registers.CURRENT_ROOM_TEMPERATURE.SequenceSize)
+        regVal_currentExhaustFanSpeed = self.mbClient.read_input_registers(self.registers.CURRENT_EXHAUST_FAN_SPEED.Address, 
+                                                                           self.registers.CURRENT_EXHAUST_FAN_SPEED.SequenceSize)
+        regVal_currentSupplyFanSpeed = self.mbClient.read_input_registers(self.registers.CURRENT_SUPPLY_FAN_SPEED.Address, 
+                                                                          self.registers.CURRENT_SUPPLY_FAN_SPEED.SequenceSize)
+        regVal_airingLevelDay = self.mbClient.read_holding_registers(self.registers.AIRING_LEVEL_DAY.Address, 
+                                                                     self.registers.AIRING_LEVEL_DAY.SequenceSize)
+        regVal_airingLevelNight = self.mbClient.read_holding_registers(self.registers.AIRING_LEVEL_NIGHT.Address, 
+                                                                       self.registers.AIRING_LEVEL_NIGHT.SequenceSize)
+        regVal_powerConsumptionHeatingDay = self.mbClient.read_input_registers(self.registers.POWER_CONSUMPTION_HEATING_DAY.Address, 
+                                                                               self.registers.POWER_CONSUMPTION_HEATING_DAY.SequenceSize)
+        regVal_powerConsumptionWarmWaterDay = self.mbClient.read_input_registers(self.registers.POWER_CONSUMPTION_WARMWATER_DAY.Address, 
+                                                                                 self.registers.POWER_CONSUMPTION_WARMWATER_DAY.SequenceSize)
 
-        outsideTemperature = self.registers.shiftValue(regVal_outsideTemperature, self.registers.OUTSIDE_TEMPERATURE.sizeBytes)
+        outsideTemperature = self.registers.shiftValue(regVal_outsideTemperature, 
+                                                       self.registers.OUTSIDE_TEMPERATURE.SequenceSize)
 
         # outsideTemperature can be less than zero
-        self.outsideTemperature = self.registers.convertSignedValue(outsideTemperature, 2) * 0.1
+        self.outsideTemperature = self.registers.convertSignedValue(outsideTemperature, HeatPumpConstants.MBREG_BITWIDTH) * 0.1
 
-        self.currentRoomTemperature = self.registers.shiftValue(regVal_currentRoomTemperature, self.registers.CURRENT_ROOM_TEMPERATURE.sizeBytes) * 0.1
-        self.currentExhaustFanSpeed = self.registers.shiftValue(regVal_currentExhaustFanSpeed, self.registers.CURRENT_EXHAUST_FAN_SPEED.sizeBytes)
-        self.currentSupplyFanSpeed = self.registers.shiftValue(regVal_currentSupplyFanSpeed, self.registers.CURRENT_SUPPLY_FAN_SPEED.sizeBytes)
-        self.airingLevelDay = self.registers.shiftValue(regVal_airingLevelDay, self.registers.AIRING_LEVEL_DAY.sizeBytes)
-        self.airingLevelNight = self.registers.shiftValue(regVal_airingLevelNight, self.registers.AIRING_LEVEL_NIGHT.sizeBytes)
+        self.currentRoomTemperature = self.registers.shiftValue(regVal_currentRoomTemperature, 
+                                                                self.registers.CURRENT_ROOM_TEMPERATURE.SequenceSize) * 0.1
+        self.currentExhaustFanSpeed = self.registers.shiftValue(regVal_currentExhaustFanSpeed, 
+                                                                self.registers.CURRENT_EXHAUST_FAN_SPEED.SequenceSize)
+        self.currentSupplyFanSpeed = self.registers.shiftValue(regVal_currentSupplyFanSpeed, 
+                                                               self.registers.CURRENT_SUPPLY_FAN_SPEED.SequenceSize)
+        self.airingLevelDay = self.registers.shiftValue(regVal_airingLevelDay, 
+                                                        self.registers.AIRING_LEVEL_DAY.SequenceSize)
+        self.airingLevelNight = self.registers.shiftValue(regVal_airingLevelNight, 
+                                                          self.registers.AIRING_LEVEL_NIGHT.SequenceSize)
+
+        self.powerConsumptionHeatingDay = self.registers.shiftValue(regVal_powerConsumptionHeatingDay, 
+                                                          self.registers.POWER_CONSUMPTION_HEATING_DAY.SequenceSize)
+
+        self.powerConsumptionWarmWaterDay = self.registers.shiftValue(regVal_powerConsumptionWarmWaterDay, 
+                                                          self.registers.POWER_CONSUMPTION_WARMWATER_DAY.SequenceSize)
 
         return True
 
@@ -157,6 +183,9 @@ class HeatPumpReader(ThreadHandlerBase):
         thisDict["currentSupplyFanSpeed"] = HeatPumpConstants.NAN_VALUE
         thisDict["airingLevelDay"] = HeatPumpConstants.NAN_VALUE
         thisDict["airingLevelNight"] = HeatPumpConstants.NAN_VALUE
+        thisDict["powerConsumptionHeatingDay"] = HeatPumpConstants.NAN_VALUE
+        thisDict["powerConsumptionWarmWaterDay"] = HeatPumpConstants.NAN_VALUE
+
         return
 
     def invoke(self):
@@ -170,6 +199,8 @@ class HeatPumpReader(ThreadHandlerBase):
         thisDict["currentSupplyFanSpeed"] = self.heatPump.currentSupplyFanSpeed
         thisDict["airingLevelDay"] = self.heatPump.airingLevelDay
         thisDict["airingLevelNight"] = self.heatPump.airingLevelNight
+        thisDict["powerConsumptionHeatingDay"] = self.heatPump.powerConsumptionHeatingDay
+        thisDict["powerConsumptionWarmWaterDay"] = self.heatPump.powerConsumptionWarmWaterDay
 
         return 
 
