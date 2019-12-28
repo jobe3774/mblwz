@@ -26,6 +26,10 @@ from raspend import RaspendApplication, ThreadHandlerBase
 from collections import namedtuple
 from pyModbusTCP.client import ModbusClient
 
+import json
+import requests
+from requests.exceptions import HTTPError
+
 ModbusRegister = namedtuple("ModbusRegister", "Address SequenceSize")
 
 class HeatPumpConstants():
@@ -204,6 +208,69 @@ class HeatPumpReader(ThreadHandlerBase):
 
         return 
 
+class PushTemperatures(ThreadHandlerBase):
+    def __init__(self, sectionName, csvFileName, dbUser, dbPassword, dbEndpoint):
+        self.sectionName = sectionName
+        self.csvFileName = csvFileName
+        self.dbUser = dbUser
+        self.dbPassword = dbPassword
+        self.dbEndpoint = dbEndpoint
+        return
+
+    def prepare(self):
+        # create a csv file for caching temperatures in case of an error
+        if not os.path.isfile(self.csvFileName):
+            try:
+                csvFile = open(self.csvFileName, "wt")
+                header = "Timestamp, Outside, Bathroom\n"
+                csvFile.write(header)
+                csvFile.close()
+            except IOError as e:
+                logging.error("Unable to open csv file '{}'! Error: {}".format(self.csvFileName, e))
+        return
+
+    def saveTemperaturesToCSVFile(self, temperatures):
+        strLine = "{},{},{}\n".format(temperatures["timestamp"], temperatures["outside"], temperatures["bathroom"])
+        try:
+            csvFile = open(self.csvFileName, "at")
+            csvFile.write(strLine)
+            csvFile.close()
+        except IOError as e:
+            logging.error("Unable to open csv file '{}'! Error: {}".format(self.csvFileName, e))
+        return
+
+
+    def invoke(self):
+        if not self.sectionName in self.sharedDict:
+            return
+
+        thisDict = self.sharedDict[self.sectionName]
+
+        temperatures = dict()
+        temperatures["timestamp"] = datetime.utcnow().isoformat()
+        temperatures["outside"] = thisDict["outsideTemperature"]
+        temperatures["bathroom"] = thisDict["currentRoomTemperature"]
+
+        try:
+            data = json.dumps(temperatures)
+            response = requests.post(self.dbEndpoint, data, auth=(self.dbUser, self.dbPassword))
+            response.raise_for_status()
+        except HTTPError as http_err:
+            print("HTTP error occurred: {}".format(http_err))
+            self.saveTemperaturesToCSVFile(temperatures)
+        except Exception as err:
+            print("Unexpected error occurred: {}".format(err))
+            self.saveTemperaturesToCSVFile(temperatures)
+        else:
+            # Response may be ok, even if the database server is unreachable.
+            if response.ok == True:
+                strResponseText = response.text.lower()
+                if strResponseText.find("connection error:") != -1:
+                    self.saveTemperaturesToCSVFile(temperatures)
+            print(response.text)
+
+        return 
+
 def main():
     logging.basicConfig(filename='mblwz.log', level=logging.INFO)
 
@@ -215,7 +282,11 @@ def main():
     cmdLineParser.add_argument("--hp-ip", help="The IP or hostname of the heat pump", type=str, required=True)
     cmdLineParser.add_argument("--hp-port", help="The modbus port the heat pump has configured (default: 502)", type=int, required=False, default=502)
     cmdLineParser.add_argument("--hp-unit-id", help="The heat pumps modbus unit id (default: 1)", type=int, required=False, default=1)
-    cmdLineParser.add_argument("--code", help="Code number for setting airing levels ", type=int, required=False, default=0)
+    cmdLineParser.add_argument("--code", help="Code number for setting airing levels", type=int, required=False, default=0)
+    cmdLineParser.add_argument("--db-user", help="User name for database log in", type=str, required=False)
+    cmdLineParser.add_argument("--db-pwd", help="Password for database log in", type=str, required=False)
+    cmdLineParser.add_argument("--db-endpoint", help="Endpoint used for pushing temperature data", type=str, required=False)
+    cmdLineParser.add_argument("--csvFileName", help="Path to a csv file for caching temperature data in case of an error", type=str, required=False)
 
     try: 
         args = cmdLineParser.parse_args()
@@ -234,6 +305,10 @@ def main():
     myApp.addCommand(lwz404.setAiringLevelNight)
 
     myApp.createWorkerThread(HeatPumpReader("stiebel_eltron_lwz404_trend", HeatPump(mbHostName, mbPortNumber, mbUnitId, args.code)), 5)
+
+    if len(args.db_user) and len(args.db_endpoint):
+        # push temperatures every 5 minutes
+        myApp.createWorkerThread(PushTemperatures("stiebel_eltron_lwz404_trend", args.csvFileName, args.db_user, args.db_pwd, args.db_endpoint), 5*60)
 
     myApp.run()
 
