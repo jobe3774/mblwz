@@ -21,7 +21,7 @@ import argparse
 if os.name == "nt":
     import win_inet_pton
 
-from datetime import datetime
+from datetime import datetime, timezone
 from raspend import RaspendApplication, ThreadHandlerBase
 from collections import namedtuple
 from pyModbusTCP.client import ModbusClient
@@ -247,7 +247,8 @@ class PushTemperatures(ThreadHandlerBase):
         thisDict = self.sharedDict[self.sectionName]
 
         temperatures = dict()
-        temperatures["timestamp"] = datetime.utcnow().isoformat()
+        
+        temperatures["timestamp"] = datetime.now(timezone.utc).timestamp()
         temperatures["outside"] = thisDict["outsideTemperature"]
         temperatures["bathroom"] = thisDict["currentRoomTemperature"]
 
