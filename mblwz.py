@@ -99,12 +99,12 @@ class HeatPump():
         return
 
     def setAiringLevelDay(self, airingLevel, code):
-        return self._setAiringLevel(self.registers.AIRING_LEVEL_DAY.number, airingLevel, code)
+        return self._setAiringLevel(self.registers.AIRING_LEVEL_DAY.Address, airingLevel, code)
 
     def setAiringLevelNight(self, airingLevel, code):
-        return self._setAiringLevel(self.registers.AIRING_LEVEL_NIGHT.number, airingLevel, code)
+        return self._setAiringLevel(self.registers.AIRING_LEVEL_NIGHT.Address, airingLevel, code)
 
-    def _setAiringLevel(self, registerNumber, airingLevel, code):
+    def _setAiringLevel(self, registerAddress, airingLevel, code):
         if int(code) != self.code:
             return (False, "Invalid security code")
 
@@ -117,7 +117,7 @@ class HeatPump():
             except:
                 raise TypeError("Could not convert {} to type 'int'".format(airingLevel))
 
-        retVal = self.mbClient.write_single_register(registerNumber, airingLevel)
+        retVal = self.mbClient.write_single_register(registerAddress, airingLevel)
 
         if not retVal:
             return (False, "Failed to set airing level")

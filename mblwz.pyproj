@@ -12,7 +12,7 @@
     <Name>mblwz</Name>
     <RootNamespace>mblwz</RootNamespace>
     <LaunchProvider>Standard Python launcher</LaunchProvider>
-    <CommandLineArguments>--port 8081 --code 123456789 --hp-ip servicewelt --db-user="root" --db-pwd="" --db-endpoint="http://localhost/templog/api/post_data.php" --csvFileName="./failedtemperaturepushes.csv"</CommandLineArguments>
+    <CommandLineArguments>--port 8081 --code 123456789 --hp-ip localhost --db-user="root" --db-pwd="" --db-endpoint="http://localhost/templog/api/post_data.php" --csvFileName="./failedtemperaturepushes.csv"</CommandLineArguments>
     <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
     <SuppressEnvironmentCreationPrompt>True</SuppressEnvironmentCreationPrompt>
   </PropertyGroup>
