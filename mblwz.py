@@ -257,16 +257,17 @@ class PushTemperatures(ThreadHandlerBase):
             response = requests.post(self.dbEndpoint, data, auth=(self.dbUser, self.dbPassword))
             response.raise_for_status()
         except HTTPError as http_err:
-            print("HTTP error occurred: {}".format(http_err))
+            logging.error("HTTP error occurred: {}".format(http_err))
             self.saveTemperaturesToCSVFile(temperatures)
         except Exception as err:
-            print("Unexpected error occurred: {}".format(err))
+            logging.error("Unexpected error occurred: {}".format(err))
             self.saveTemperaturesToCSVFile(temperatures)
         else:
             # Response may be ok, even if the database server is unreachable.
             if response.ok == True:
                 strResponseText = response.text.lower()
                 if strResponseText.find("connection error:") != -1:
+                    logging.error("Could not connect database!")
                     self.saveTemperaturesToCSVFile(temperatures)
             print(response.text)
 
