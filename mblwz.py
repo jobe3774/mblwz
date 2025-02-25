@@ -81,10 +81,7 @@ class HeatPump():
     def __init__(self, ipOrHostName, portNumber, unitId, code):
         self.code = code
         self.registers = HeatPumpRegisters()
-        self.mbClient = ModbusClient()
-        self.mbClient.host(ipOrHostName)
-        self.mbClient.port(portNumber)
-        self.mbClient.unit_id(unitId)
+        self.mbClient = ModbusClient(host=ipOrHostName, port=portNumber, unit_id=unitId)
         self.mbClient.open()
 
         self.outsideTemperature = HeatPumpConstants.NAN_VALUE
@@ -125,7 +122,7 @@ class HeatPump():
             return (True, "Setting airing level successful")
 
     def readCurrentValues(self):
-        if not self.mbClient.is_open() and not self.mbClient.open():
+        if not self.mbClient.is_open and not self.mbClient.open():
             print ("Unable to connect to {}:{}".format(self.mbClient.host(), self.mbClient.port()))
             return False
 
